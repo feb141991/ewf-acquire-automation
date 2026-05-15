@@ -145,7 +145,7 @@ elif SOURCE_TYPE == "vmdk":
     if not os.path.exists(VMDK_PATH):
         fail(f"VMDK source file {VMDK_PATH} not found.")
     if shutil.which("qemu-img") is None:
-        fail("qemu-img not found. Install qemu (e.g. brew install qemu) for VMDK conversion.")
+        fail("qemu-img not found. Install qemu for your platform (e.g. brew install qemu on macOS).")
 
     vmdk_raw_output = os.path.join(IMAGE_DIR, f"{case_number}.raw")
     print(f"[*] Converting VMDK to RAW: {VMDK_PATH} -> {vmdk_raw_output}")
@@ -157,7 +157,8 @@ elif SOURCE_TYPE == "vmdk":
             capture_output=True
         )
     except subprocess.CalledProcessError as exc:
-        fail(f"VMDK to RAW conversion failed: {exc.stderr.strip() if exc.stderr else exc}")
+        conversion_error = exc.stderr.strip() if exc.stderr else "Check qemu-img installation and VMDK file integrity."
+        fail(f"VMDK to RAW conversion failed: {conversion_error}")
     acquisition_source = vmdk_raw_output
     cleanup_raw_after_acquire = True
 else:
