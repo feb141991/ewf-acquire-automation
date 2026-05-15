@@ -29,7 +29,7 @@ if os.geteuid() != 0:
 
 SOURCE_TYPE = "device"  # "device" or "vmdk"
 EVIDENCE_DEVICE = "/dev/rdisk5"
-VMDK_PATH = ""
+VMDK_PATH = "/path/to/source.vmdk"  # required when SOURCE_TYPE = "vmdk"
 
 IMAGE_DIR = "/Users/princesharma/Library/CloudStorage/GoogleDrive-career.prince@gmail.com/My Drive/saks_drive/"
 
@@ -139,7 +139,7 @@ if SOURCE_TYPE == "device":
     else:
         print("[!] Warning: Could not parse disk size (continuing anyway)")
 elif SOURCE_TYPE == "vmdk":
-    if not VMDK_PATH or not VMDK_PATH.strip():
+    if not VMDK_PATH.strip():
         fail("VMDK_PATH is required when SOURCE_TYPE is 'vmdk'.")
     if not os.path.exists(VMDK_PATH):
         fail(f"VMDK source file {VMDK_PATH} not found.")
