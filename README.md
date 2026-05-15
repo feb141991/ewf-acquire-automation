@@ -26,4 +26,9 @@ It is designed to:
 - pexpect
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txtt
+```
+
+## 📁 Where is the code?
+- Main automation script: `/home/runner/work/ewf-acquire-automation/ewf-acquire-automation/ewfacquire_auto.py`
+- Dependency list: `/home/runner/work/ewf-acquire-automation/ewf-acquire-automation/requirements.txtt`
