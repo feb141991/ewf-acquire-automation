@@ -149,18 +149,15 @@ elif SOURCE_TYPE == "vmdk":
     if shutil.which("qemu-img") is None:
         fail("qemu-img not found. Install with: brew install qemu")
 
-    vmdk_raw_output = os.path.join(IMAGE_DIR, f"{case_number}.raw")
+    vmdk_raw_output = os.path.join(IMAGE_DIR, f"{case_number}_vmdk_intermediate.raw")
     print(f"[*] Converting VMDK to RAW: {VMDK_PATH} -> {vmdk_raw_output}")
     try:
         subprocess.run(
-            ["qemu-img", "convert", "-f", "vmdk", "-O", "raw", VMDK_PATH, vmdk_raw_output],
-            check=True,
-            text=True,
-            capture_output=True
+            ["qemu-img", "convert", "-p", "-f", "vmdk", "-O", "raw", VMDK_PATH, vmdk_raw_output],
+            check=True
         )
     except subprocess.CalledProcessError as exc:
-        conversion_error = exc.stderr.strip() if exc.stderr else "Possible causes: insufficient disk space, corrupted VMDK, unsupported VMDK format, or qemu-img installation issue."
-        fail(f"VMDK to RAW conversion failed: {conversion_error}")
+        fail(f"VMDK to RAW conversion failed (exit code {exc.returncode}).")
     acquisition_source = vmdk_raw_output
     cleanup_raw_after_acquire = True
 else:
@@ -284,7 +281,7 @@ else:
     print("DO NOT USE THIS IMAGE.")
 print("==============================\n")
 
-if cleanup_raw_after_acquire and os.path.exists(acquisition_source):
+if verified and cleanup_raw_after_acquire and os.path.exists(acquisition_source):
     try:
         os.remove(acquisition_source)
         print(f"[*] Removed intermediate RAW file: {acquisition_source}")
