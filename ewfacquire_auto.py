@@ -13,6 +13,7 @@ import os
 import sys
 import time
 import subprocess
+import shutil
 
 # =========================
 # SAFETY CHECK – ROOT
@@ -26,7 +27,9 @@ if os.geteuid() != 0:
 # USER CONFIGURATION
 # =========================
 
+SOURCE_TYPE = "device"  # case-sensitive: only exact "device" or "vmdk" values are accepted
 EVIDENCE_DEVICE = "/dev/rdisk5"
+VMDK_PATH = ""  # required when SOURCE_TYPE = "vmdk"
 
 IMAGE_DIR = "/Users/princesharma/Library/CloudStorage/GoogleDrive-career.prince@gmail.com/My Drive/saks_drive/"
 
@@ -61,28 +64,6 @@ def fail(msg):
     print(f"\n❌ ERROR: {msg}\n")
     sys.exit(1)
 
-print("[*] Performing pre-flight checks...")
-
-# 1️⃣ Device node must exist
-if not os.path.exists(EVIDENCE_DEVICE):
-    fail(f"Evidence device {EVIDENCE_DEVICE} not found.")
-
-# 2️⃣ diskutil must recognize the disk
-disk_device = EVIDENCE_DEVICE.replace("/dev/r", "/dev/")
-
-try:
-    info = subprocess.check_output(
-        ["diskutil", "info", disk_device],
-        text=True
-    )
-except subprocess.CalledProcessError:
-    fail("diskutil could not read device info.")
-
-# 3️⃣ Disk must NOT be mounted
-if "Mounted: Yes" in info:
-    fail("Evidence device is mounted. Unmount before acquisition.")
-
-# 4️⃣ RAW READ PROBE (CRITICAL)
 def raw_read_test(device):
     try:
         subprocess.check_call(
@@ -94,41 +75,6 @@ def raw_read_test(device):
     except subprocess.CalledProcessError:
         return False
 
-print("[*] Verifying raw read access...")
-
-if not raw_read_test(EVIDENCE_DEVICE):
-    fail("Evidence device is not readable (not connected or not configured).")
-
-# 5️⃣ Disk size (informational only)
-size_gb = None
-
-for line in info.splitlines():
-    if "Disk Size" in line:
-        if "Bytes" in line:
-            try:
-                bytes_part = line.split("Bytes")[0].split("(")[-1].strip()
-                size_bytes = int(bytes_part)
-                size_gb = size_bytes / (1024 ** 3)
-            except Exception:
-                pass
-
-        if size_gb is None:
-            try:
-                gb_part = line.split(":")[1].strip().split(" ")[0]
-                size_gb = float(gb_part)
-            except Exception:
-                pass
-        break
-
-if size_gb is not None:
-    print(f"[+] Evidence device detected: {size_gb:.2f} GB (unmounted)")
-else:
-    print("[!] Warning: Could not parse disk size (continuing anyway)")
-
-# =========================
-# AUTO-GENERATED VALUES
-# =========================
-
 today = datetime.date.today().strftime("%Y%m%d")
 case_number = f"{CASE_PREFIX}_{CASE_START_NUMBER:03d}_{today}"
 
@@ -137,6 +83,87 @@ log_file = os.path.join(IMAGE_DIR, f"{case_number}_ewfacquire.log")
 
 os.makedirs(IMAGE_DIR, exist_ok=True)
 
+print("[*] Performing pre-flight checks...")
+
+acquisition_source = EVIDENCE_DEVICE
+cleanup_raw_after_acquire = False
+
+if SOURCE_TYPE == "device":
+    # 1️⃣ Device node must exist
+    if not os.path.exists(EVIDENCE_DEVICE):
+        fail(f"Evidence device {EVIDENCE_DEVICE} not found.")
+
+    # 2️⃣ diskutil must recognize the disk
+    disk_device = EVIDENCE_DEVICE.replace("/dev/r", "/dev/")
+
+    try:
+        info = subprocess.check_output(
+            ["diskutil", "info", disk_device],
+            text=True
+        )
+    except subprocess.CalledProcessError:
+        fail("diskutil could not read device info.")
+
+    # 3️⃣ Disk must NOT be mounted
+    if "Mounted: Yes" in info:
+        fail("Evidence device is mounted. Unmount before acquisition.")
+
+    # 4️⃣ RAW READ PROBE (CRITICAL)
+    print("[*] Verifying raw read access...")
+
+    if not raw_read_test(EVIDENCE_DEVICE):
+        fail("Evidence device is not readable (not connected or not configured).")
+
+    # 5️⃣ Disk size (informational only)
+    size_gb = None
+
+    for line in info.splitlines():
+        if "Disk Size" in line:
+            if "Bytes" in line:
+                try:
+                    bytes_part = line.split("Bytes")[0].split("(")[-1].strip()
+                    size_bytes = int(bytes_part)
+                    size_gb = size_bytes / (1024 ** 3)
+                except Exception:
+                    pass
+
+            if size_gb is None:
+                try:
+                    gb_part = line.split(":")[1].strip().split(" ")[0]
+                    size_gb = float(gb_part)
+                except Exception:
+                    pass
+            break
+
+    if size_gb is not None:
+        print(f"[+] Evidence device detected: {size_gb:.2f} GB (unmounted)")
+    else:
+        print("[!] Warning: Could not parse disk size (continuing anyway)")
+elif SOURCE_TYPE == "vmdk":
+    vmdk_path = VMDK_PATH.strip()
+    if not vmdk_path:
+        fail("VMDK_PATH is required when SOURCE_TYPE is 'vmdk'.")
+    if not os.path.isabs(vmdk_path):
+        fail("VMDK_PATH must be an absolute path.")
+    if not os.path.exists(vmdk_path):
+        fail(f"VMDK source file {vmdk_path} not found.")
+    if shutil.which("qemu-img") is None:
+        fail("qemu-img not found. Install with: brew install qemu")
+
+    vmdk_raw_output = os.path.join(IMAGE_DIR, f"{case_number}_{int(time.time())}_vmdk_converted.raw")
+    print(f"[*] Converting VMDK to RAW: {vmdk_path} -> {vmdk_raw_output}")
+    try:
+        subprocess.run(
+            ["qemu-img", "convert", "-p", "-f", "vmdk", "-O", "raw", vmdk_path, vmdk_raw_output],
+            check=True
+        )
+    except subprocess.CalledProcessError as exc:
+        fail(f"VMDK to RAW conversion failed (exit code {exc.returncode}).")
+    acquisition_source = vmdk_raw_output
+    cleanup_raw_after_acquire = True
+else:
+    fail("SOURCE_TYPE must be 'device' or 'vmdk'.")
+
 # =========================
 # START ACQUISITION
 # =========================
@@ -144,7 +171,8 @@ os.makedirs(IMAGE_DIR, exist_ok=True)
 print(f"\n[+] Starting forensic acquisition for {case_number}\n")
 
 child = pexpect.spawn(
-    f"ewfacquire {EVIDENCE_DEVICE}",
+    "ewfacquire",
+    [acquisition_source],
     encoding="utf-8",
     timeout=None
 )
@@ -253,3 +281,13 @@ else:
     print("❌ HASH NOT VERIFIED")
     print("DO NOT USE THIS IMAGE.")
 print("==============================\n")
+
+if cleanup_raw_after_acquire and os.path.exists(acquisition_source):
+    if verified:
+        try:
+            os.remove(acquisition_source)
+            print(f"[*] Removed intermediate RAW file: {acquisition_source}")
+        except OSError:
+            print(f"[!] Warning: Could not remove intermediate RAW file: {acquisition_source}")
+    else:
+        print(f"[!] Intermediate RAW kept for troubleshooting: {acquisition_source}")
