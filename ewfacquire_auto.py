@@ -27,9 +27,9 @@ if os.geteuid() != 0:
 # USER CONFIGURATION
 # =========================
 
-SOURCE_TYPE = "device"  # "device" or "vmdk"
+SOURCE_TYPE = "device"  # required: "device" for physical disk or "vmdk" for virtual disk image
 EVIDENCE_DEVICE = "/dev/rdisk5"
-VMDK_PATH = "/path/to/source.vmdk"  # required when SOURCE_TYPE = "vmdk"
+VMDK_PATH = ""  # required when SOURCE_TYPE = "vmdk"
 
 IMAGE_DIR = "/Users/princesharma/Library/CloudStorage/GoogleDrive-career.prince@gmail.com/My Drive/saks_drive/"
 
@@ -86,6 +86,7 @@ os.makedirs(IMAGE_DIR, exist_ok=True)
 print("[*] Performing pre-flight checks...")
 
 acquisition_source = EVIDENCE_DEVICE
+cleanup_raw_after_acquire = False
 
 if SOURCE_TYPE == "device":
     # 1️⃣ Device node must exist
@@ -149,12 +150,16 @@ elif SOURCE_TYPE == "vmdk":
     vmdk_raw_output = os.path.join(IMAGE_DIR, f"{case_number}.raw")
     print(f"[*] Converting VMDK to RAW: {VMDK_PATH} -> {vmdk_raw_output}")
     try:
-        subprocess.check_call(
-            ["qemu-img", "convert", "-p", "-f", "vmdk", "-O", "raw", VMDK_PATH, vmdk_raw_output]
+        subprocess.run(
+            ["qemu-img", "convert", "-f", "vmdk", "-O", "raw", VMDK_PATH, vmdk_raw_output],
+            check=True,
+            text=True,
+            capture_output=True
         )
-    except subprocess.CalledProcessError:
-        fail("VMDK to RAW conversion failed.")
+    except subprocess.CalledProcessError as exc:
+        fail(f"VMDK to RAW conversion failed: {exc.stderr.strip() if exc.stderr else exc}")
     acquisition_source = vmdk_raw_output
+    cleanup_raw_after_acquire = True
 else:
     fail("SOURCE_TYPE must be 'device' or 'vmdk'.")
 
@@ -275,3 +280,10 @@ else:
     print("❌ HASH NOT VERIFIED")
     print("DO NOT USE THIS IMAGE.")
 print("==============================\n")
+
+if cleanup_raw_after_acquire and os.path.exists(acquisition_source):
+    try:
+        os.remove(acquisition_source)
+        print(f"[*] Removed intermediate RAW file: {acquisition_source}")
+    except OSError:
+        print(f"[!] Warning: Could not remove intermediate RAW file: {acquisition_source}")
