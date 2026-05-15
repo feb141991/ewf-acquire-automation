@@ -13,6 +13,7 @@ import os
 import sys
 import time
 import subprocess
+import shutil
 
 # =========================
 # SAFETY CHECK – ROOT
@@ -85,7 +86,6 @@ os.makedirs(IMAGE_DIR, exist_ok=True)
 print("[*] Performing pre-flight checks...")
 
 acquisition_source = EVIDENCE_DEVICE
-vmdk_raw_output = os.path.join(IMAGE_DIR, f"{case_number}.raw")
 
 if SOURCE_TYPE == "device":
     # 1️⃣ Device node must exist
@@ -139,13 +139,14 @@ if SOURCE_TYPE == "device":
     else:
         print("[!] Warning: Could not parse disk size (continuing anyway)")
 elif SOURCE_TYPE == "vmdk":
-    if not VMDK_PATH:
+    if not VMDK_PATH or not VMDK_PATH.strip():
         fail("VMDK_PATH is required when SOURCE_TYPE is 'vmdk'.")
     if not os.path.exists(VMDK_PATH):
         fail(f"VMDK source file {VMDK_PATH} not found.")
-    if subprocess.call(["which", "qemu-img"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) != 0:
+    if shutil.which("qemu-img") is None:
         fail("qemu-img not found. Install qemu (e.g. brew install qemu) for VMDK conversion.")
 
+    vmdk_raw_output = os.path.join(IMAGE_DIR, f"{case_number}.raw")
     print(f"[*] Converting VMDK to RAW: {VMDK_PATH} -> {vmdk_raw_output}")
     try:
         subprocess.check_call(
