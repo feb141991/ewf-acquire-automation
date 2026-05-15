@@ -27,7 +27,7 @@ if os.geteuid() != 0:
 # USER CONFIGURATION
 # =========================
 
-SOURCE_TYPE = "device"  # case-sensitive options: "device" for physical disk or "vmdk" for virtual disk image
+SOURCE_TYPE = "device"  # case-sensitive: only exact "device" or "vmdk" values are accepted
 EVIDENCE_DEVICE = "/dev/rdisk5"
 VMDK_PATH = ""  # required when SOURCE_TYPE = "vmdk"
 
@@ -140,20 +140,21 @@ if SOURCE_TYPE == "device":
     else:
         print("[!] Warning: Could not parse disk size (continuing anyway)")
 elif SOURCE_TYPE == "vmdk":
-    if not VMDK_PATH.strip():
+    vmdk_path = VMDK_PATH.strip()
+    if not vmdk_path:
         fail("VMDK_PATH is required when SOURCE_TYPE is 'vmdk'.")
-    if not os.path.isabs(VMDK_PATH):
+    if not os.path.isabs(vmdk_path):
         fail("VMDK_PATH must be an absolute path.")
-    if not os.path.exists(VMDK_PATH):
-        fail(f"VMDK source file {VMDK_PATH} not found.")
+    if not os.path.exists(vmdk_path):
+        fail(f"VMDK source file {vmdk_path} not found.")
     if shutil.which("qemu-img") is None:
         fail("qemu-img not found. Install with: brew install qemu")
 
-    vmdk_raw_output = os.path.join(IMAGE_DIR, f"{case_number}_vmdk_converted.raw")
-    print(f"[*] Converting VMDK to RAW: {VMDK_PATH} -> {vmdk_raw_output}")
+    vmdk_raw_output = os.path.join(IMAGE_DIR, f"{case_number}_{int(time.time())}_vmdk_converted.raw")
+    print(f"[*] Converting VMDK to RAW: {vmdk_path} -> {vmdk_raw_output}")
     try:
         subprocess.run(
-            ["qemu-img", "convert", "-p", "-f", "vmdk", "-O", "raw", VMDK_PATH, vmdk_raw_output],
+            ["qemu-img", "convert", "-p", "-f", "vmdk", "-O", "raw", vmdk_path, vmdk_raw_output],
             check=True
         )
     except subprocess.CalledProcessError as exc:
@@ -281,11 +282,12 @@ else:
     print("DO NOT USE THIS IMAGE.")
 print("==============================\n")
 
-if verified and cleanup_raw_after_acquire and os.path.exists(acquisition_source):
-    try:
-        os.remove(acquisition_source)
-        print(f"[*] Removed intermediate RAW file: {acquisition_source}")
-    except OSError:
-        print(f"[!] Warning: Could not remove intermediate RAW file: {acquisition_source}")
-elif not verified and cleanup_raw_after_acquire and os.path.exists(acquisition_source):
-    print(f"[!] Intermediate RAW kept for troubleshooting: {acquisition_source}")
+if cleanup_raw_after_acquire and os.path.exists(acquisition_source):
+    if verified:
+        try:
+            os.remove(acquisition_source)
+            print(f"[*] Removed intermediate RAW file: {acquisition_source}")
+        except OSError:
+            print(f"[!] Warning: Could not remove intermediate RAW file: {acquisition_source}")
+    else:
+        print(f"[!] Intermediate RAW kept for troubleshooting: {acquisition_source}")
