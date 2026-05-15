@@ -27,7 +27,7 @@ if os.geteuid() != 0:
 # USER CONFIGURATION
 # =========================
 
-SOURCE_TYPE = "device"  # options: "device" for physical disk or "vmdk" for virtual disk image
+SOURCE_TYPE = "device"  # case-sensitive options: "device" for physical disk or "vmdk" for virtual disk image
 EVIDENCE_DEVICE = "/dev/rdisk5"
 VMDK_PATH = ""  # required when SOURCE_TYPE = "vmdk"
 
@@ -149,7 +149,7 @@ elif SOURCE_TYPE == "vmdk":
     if shutil.which("qemu-img") is None:
         fail("qemu-img not found. Install with: brew install qemu")
 
-    vmdk_raw_output = os.path.join(IMAGE_DIR, f"{case_number}_vmdk_intermediate.raw")
+    vmdk_raw_output = os.path.join(IMAGE_DIR, f"{case_number}_vmdk_converted.raw")
     print(f"[*] Converting VMDK to RAW: {VMDK_PATH} -> {vmdk_raw_output}")
     try:
         subprocess.run(
@@ -287,3 +287,5 @@ if verified and cleanup_raw_after_acquire and os.path.exists(acquisition_source)
         print(f"[*] Removed intermediate RAW file: {acquisition_source}")
     except OSError:
         print(f"[!] Warning: Could not remove intermediate RAW file: {acquisition_source}")
+elif not verified and cleanup_raw_after_acquire and os.path.exists(acquisition_source):
+    print(f"[!] Intermediate RAW kept for troubleshooting: {acquisition_source}")
