@@ -27,7 +27,7 @@ if os.geteuid() != 0:
 # USER CONFIGURATION
 # =========================
 
-SOURCE_TYPE = "device"  # required: "device" for physical disk or "vmdk" for virtual disk image
+SOURCE_TYPE = "device"  # options: "device" for physical disk or "vmdk" for virtual disk image
 EVIDENCE_DEVICE = "/dev/rdisk5"
 VMDK_PATH = ""  # required when SOURCE_TYPE = "vmdk"
 
@@ -142,10 +142,12 @@ if SOURCE_TYPE == "device":
 elif SOURCE_TYPE == "vmdk":
     if not VMDK_PATH.strip():
         fail("VMDK_PATH is required when SOURCE_TYPE is 'vmdk'.")
+    if not os.path.isabs(VMDK_PATH):
+        fail("VMDK_PATH must be an absolute path.")
     if not os.path.exists(VMDK_PATH):
         fail(f"VMDK source file {VMDK_PATH} not found.")
     if shutil.which("qemu-img") is None:
-        fail("qemu-img not found. Install qemu for your platform (e.g. brew install qemu on macOS).")
+        fail("qemu-img not found. Install with: brew install qemu")
 
     vmdk_raw_output = os.path.join(IMAGE_DIR, f"{case_number}.raw")
     print(f"[*] Converting VMDK to RAW: {VMDK_PATH} -> {vmdk_raw_output}")
@@ -157,7 +159,7 @@ elif SOURCE_TYPE == "vmdk":
             capture_output=True
         )
     except subprocess.CalledProcessError as exc:
-        conversion_error = exc.stderr.strip() if exc.stderr else "Check qemu-img installation and VMDK file integrity."
+        conversion_error = exc.stderr.strip() if exc.stderr else "Possible causes: insufficient disk space, corrupted VMDK, unsupported VMDK format, or qemu-img installation issue."
         fail(f"VMDK to RAW conversion failed: {conversion_error}")
     acquisition_source = vmdk_raw_output
     cleanup_raw_after_acquire = True
